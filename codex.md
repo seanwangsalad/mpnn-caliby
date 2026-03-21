@@ -51,7 +51,7 @@ Supported inputs:
 - `--output-csv`
 - optional controls:
   - `--seed`
-  - `--sampling-temp`
+  - `--temp`
   - `--num-workers`
   - `--verbose`
 
@@ -160,6 +160,14 @@ Restricted amino acid handling:
 - `--restricted-aas` is interpreted as a simple string of one-letter codes
 - for example, `CFLY` means omit `C`, `F`, `L`, and `Y`
 - whitespace and commas are ignored and letters are uppercased
+
+Temperature handling:
+
+- `--temp` / `-temp` applies to both backends
+- default is `0.01` for Caliby
+- default is `0.6` for ProteinMPNN
+- for Caliby, it is passed as `potts_sampling_cfg.potts_temperature`
+- for ProteinMPNN, it is passed as `sampling_temp`
 
 Checkpoint resolution:
 

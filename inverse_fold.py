@@ -74,7 +74,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-repeats", type=int, required=True, help="Number of sampled sequences per PDB.")
     parser.add_argument("--output-csv", default="inverse_fold_outputs.csv", help="Output CSV path.")
     parser.add_argument("--seed", type=int, default=0, help="Sampling seed. 0 keeps backend default behavior.")
-    parser.add_argument("--sampling-temp", default="0.1", help="ProteinMPNN sampling temperature string.")
+    parser.add_argument(
+        "--temp",
+        "-temp",
+        type=float,
+        default=None,
+        help="Sampling temperature. Defaults to 0.01 for Caliby and 0.6 for ProteinMPNN.",
+    )
     parser.add_argument("--num-workers", type=int, default=0, help="Caliby dataloader worker count.")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose backend logging.")
     args = parser.parse_args()
@@ -379,6 +385,14 @@ def get_sanity_output_path(output_csv: str, suffix: str) -> Path:
     return output_path.with_name(f"{output_path.stem}{suffix}")
 
 
+def get_effective_temp(args: argparse.Namespace) -> float:
+    if args.temp is not None:
+        return args.temp
+    if args.model_type == "caliby":
+        return 0.01
+    return 0.6
+
+
 def run_caliby(
     args: argparse.Namespace,
     chain_columns: list[str],
@@ -424,6 +438,7 @@ def run_caliby(
     pos_constraint_df.to_csv(sanity_csv_path, index=False)
     caliby_inputs_df = pos_constraint_df.copy()
     caliby_inputs_df["restricted_aas"] = args.restricted_aas or ""
+    caliby_inputs_df["temp"] = get_effective_temp(args)
     caliby_inputs_df.to_csv(sanity_inputs_csv_path, index=False)
 
     sampling_cfg_path = CALIBY_ROOT / "caliby" / "configs" / "seq_des" / "atom_mpnn_inference.yaml"
@@ -436,6 +451,9 @@ def run_caliby(
                 "overrides": {
                     "num_seqs_per_pdb": args.num_repeats,
                     "omit_aas": list(args.restricted_aas) if args.restricted_aas else None,
+                    "potts_sampling_cfg": {
+                        "potts_temperature": get_effective_temp(args),
+                    },
                     "num_workers": args.num_workers,
                     "verbose": bool(args.verbose),
                 },
@@ -613,6 +631,7 @@ def run_proteinmpnn(
                     "fixed_chains",
                     "fixed_positions_json",
                     "bias_jsonl",
+                    "temp",
                 ],
             )
             writer.writeheader()
@@ -625,6 +644,7 @@ def run_proteinmpnn(
                         "fixed_chains": ",".join(fixed_chains),
                         "fixed_positions_json": json.dumps(fixed_positions_dict[name], sort_keys=True),
                         "bias_jsonl": args.bias_jsonl,
+                        "temp": get_effective_temp(args),
                     }
                 )
 
@@ -649,7 +669,7 @@ def run_proteinmpnn(
             num_seq_per_target=args.num_repeats,
             batch_size=1,
             max_length=200000,
-            sampling_temp=args.sampling_temp,
+            sampling_temp=str(get_effective_temp(args)),
             out_folder=str(output_dir_path),
             pdb_path="",
             pdb_path_chains="",

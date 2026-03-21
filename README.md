@@ -52,7 +52,7 @@ Optional ProteinMPNN flags:
 
 - `--restricted-aas CYF`
 - `--bias-jsonl /path/to/bias.jsonl`
-- `--sampling-temp 0.1`
+- `--temp 0.6`
 - `--seed 1`
 - `--verbose`
 
@@ -71,6 +71,7 @@ python inverse_fold.py \
 Optional Caliby flags:
 
 - `--restricted-aas CYF`
+- `--temp 0.01`
 - `--num-workers 0`
 - `--seed 1`
 - `--verbose`
@@ -156,6 +157,20 @@ It is passed through to ProteinMPNN as both:
 - `bias_by_res_jsonl`
 
 Caliby rejects this option.
+
+## Temperature
+
+`--temp` / `-temp` applies to both backends.
+
+Defaults:
+
+- Caliby: `0.01`
+- ProteinMPNN: `0.6`
+
+Behavior:
+
+- for Caliby, this is passed as `potts_sampling_cfg.potts_temperature`
+- for ProteinMPNN, this is passed as `sampling_temp`
 
 ## Outputs
 
