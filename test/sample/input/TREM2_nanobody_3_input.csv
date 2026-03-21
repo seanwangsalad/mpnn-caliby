@@ -1,0 +1,6 @@
+id,pdb_name,target_id,binder_id,processed_path,data_level,hotspots,num_chains,seq_len,modeled_seq_len
+TREM2_nanobody_3_sample_0,TREM2_nanobody_3_sample_0,B,['A'],/home/seanwang/Desktop/pull/PPIFLOW/baffr/output/partial_flow/TREM2_nanobody_3/input/TREM2_nanobody_3_sample_0.pkl,1,"[135, 137]",2,145,145
+TREM2_nanobody_3_sample_1,TREM2_nanobody_3_sample_1,B,['A'],/home/seanwang/Desktop/pull/PPIFLOW/baffr/output/partial_flow/TREM2_nanobody_3/input/TREM2_nanobody_3_sample_1.pkl,1,"[135, 137]",2,145,145
+TREM2_nanobody_3_sample_2,TREM2_nanobody_3_sample_2,B,['A'],/home/seanwang/Desktop/pull/PPIFLOW/baffr/output/partial_flow/TREM2_nanobody_3/input/TREM2_nanobody_3_sample_2.pkl,1,"[135, 137]",2,145,145
+TREM2_nanobody_3_sample_3,TREM2_nanobody_3_sample_3,B,['A'],/home/seanwang/Desktop/pull/PPIFLOW/baffr/output/partial_flow/TREM2_nanobody_3/input/TREM2_nanobody_3_sample_3.pkl,1,"[135, 137]",2,145,145
+TREM2_nanobody_3_sample_4,TREM2_nanobody_3_sample_4,B,['A'],/home/seanwang/Desktop/pull/PPIFLOW/baffr/output/partial_flow/TREM2_nanobody_3/input/TREM2_nanobody_3_sample_4.pkl,1,"[135, 137]",2,145,145

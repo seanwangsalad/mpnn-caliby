@@ -1,0 +1,8 @@
+name: inverse-fold
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - git
+  - rdkit>=2024.03,<2025.09

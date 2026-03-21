@@ -24,7 +24,10 @@ from helper_scripts.make_fixed_positions_dict import make_fixed_positions_dict
 
 def main(args):
     parsed_chain_dict_list = parse_multiple_chains(args.folder_with_pdbs_path, args.ca_only)
-    chain_id_dict = assign_fixed_chains(parsed_chain_dict_list, args.chain_list)
+    chain_id_dict = None
+    if args.chain_list:
+        chain_id_dict = assign_fixed_chains(parsed_chain_dict_list, args.chain_list)
+    fixed_positions_dict = None
     if args.position_list:
         fixed_positions_dict = make_fixed_positions_dict(parsed_chain_dict_list, args.chain_list, args.position_list)
 
