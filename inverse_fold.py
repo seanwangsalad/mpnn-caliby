@@ -59,7 +59,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--checkpoint",
         required=True,
-        help="Caliby checkpoint/name, or an exact ProteinMPNN .pt checkpoint path.",
+        help="Absolute checkpoint path. For ProteinMPNN, this must be an exact .pt file path.",
     )
     parser.add_argument(
         "--restricted-aas",
@@ -71,7 +71,12 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional ProteinMPNN bias JSONL. Ignored by Caliby.",
     )
-    parser.add_argument("--num-repeats", type=int, required=True, help="Number of sampled sequences per PDB.")
+    parser.add_argument(
+        "--num_seq_per_target",
+        type=int,
+        required=True,
+        help="Number of sampled sequences generated per target/PDB.",
+    )
     parser.add_argument("--output-csv", default="inverse_fold_outputs.csv", help="Output CSV path.")
     parser.add_argument("--seed", type=int, default=0, help="Sampling seed. 0 keeps backend default behavior.")
     parser.add_argument(
@@ -81,12 +86,23 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Sampling temperature. Defaults to 0.01 for Caliby and 0.6 for ProteinMPNN.",
     )
-    parser.add_argument("--num-workers", type=int, default=0, help="Caliby dataloader worker count.")
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=1,
+        help="Caliby num_workers, and ProteinMPNN batch_size. Defaults to 1.",
+    )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose backend logging.")
     args = parser.parse_args()
 
-    if args.num_repeats < 1:
-        raise ValueError("--num-repeats must be >= 1.")
+    if args.num_seq_per_target < 1:
+        raise ValueError("--num_seq_per_target must be >= 1.")
+    if not Path(args.checkpoint).expanduser().is_absolute():
+        raise ValueError("--checkpoint must be an absolute path.")
+    if args.num_workers < 1:
+        raise ValueError("--num-workers must be >= 1.")
+    if args.model_type in {"mpnn", "proteinmpnn"} and args.num_seq_per_target % args.num_workers != 0:
+        raise ValueError("For ProteinMPNN, --num_seq_per_target must be divisible by --num-workers.")
     if args.model_type == "caliby" and args.bias_jsonl:
         raise ValueError("--bias-jsonl is only supported for ProteinMPNN.")
 
@@ -449,7 +465,7 @@ def run_caliby(
                 "ckpt_name_or_path": args.checkpoint,
                 "sampling_cfg": str(sampling_cfg_path),
                 "overrides": {
-                    "num_seqs_per_pdb": args.num_repeats,
+                    "num_seqs_per_pdb": args.num_seq_per_target,
                     "omit_aas": list(args.restricted_aas) if args.restricted_aas else None,
                     "potts_sampling_cfg": {
                         "potts_temperature": get_effective_temp(args),
@@ -529,7 +545,7 @@ def run_caliby(
 
 
 def resolve_mpnn_checkpoint(checkpoint: str) -> tuple[str, str]:
-    checkpoint_path = resolve_repo_path(checkpoint)
+    checkpoint_path = Path(checkpoint).expanduser()
     if checkpoint_path.suffix != ".pt":
         raise ValueError(f"ProteinMPNN --checkpoint must point to an exact .pt file, got: {checkpoint}")
     if not checkpoint_path.is_file():
@@ -632,6 +648,8 @@ def run_proteinmpnn(
                     "fixed_positions_json",
                     "bias_jsonl",
                     "temp",
+                    "num_seq_per_target",
+                    "num_workers",
                 ],
             )
             writer.writeheader()
@@ -645,6 +663,8 @@ def run_proteinmpnn(
                         "fixed_positions_json": json.dumps(fixed_positions_dict[name], sort_keys=True),
                         "bias_jsonl": args.bias_jsonl,
                         "temp": get_effective_temp(args),
+                        "num_seq_per_target": args.num_seq_per_target,
+                        "num_workers": args.num_workers,
                     }
                 )
 
@@ -666,8 +686,8 @@ def run_proteinmpnn(
             conditional_probs_only_backbone=0,
             unconditional_probs_only=0,
             backbone_noise=0.0,
-            num_seq_per_target=args.num_repeats,
-            batch_size=1,
+            num_seq_per_target=args.num_seq_per_target,
+            batch_size=args.num_workers,
             max_length=200000,
             sampling_temp=str(get_effective_temp(args)),
             out_folder=str(output_dir_path),

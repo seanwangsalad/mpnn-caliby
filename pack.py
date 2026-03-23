@@ -16,10 +16,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Thin wrapper around Caliby sidechain packing."
     )
-    parser.add_argument("--checkpoint", required=True, help="Caliby checkpoint path or checkpoint name.")
+    parser.add_argument("--checkpoint", required=True, help="Absolute Caliby checkpoint path.")
     parser.add_argument("--pdb-dir", required=True, help="Directory of PDB files to pack.")
     parser.add_argument("--output-dir", required=True, help="Destination output directory.")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not Path(args.checkpoint).expanduser().is_absolute():
+        raise ValueError("--checkpoint must be an absolute path.")
+    return args
 
 
 def main() -> None:

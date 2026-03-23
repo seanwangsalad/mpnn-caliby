@@ -44,7 +44,7 @@ python inverse_fold.py \
   --fixed-positions-csv /path/to/fixed.csv \
   --model-type proteinmpnn \
   --checkpoint /path/to/model.pt \
-  --num-repeats 2 \
+  --num_seq_per_target 2 \
   --output-csv output.csv
 ```
 
@@ -53,6 +53,7 @@ Optional ProteinMPNN flags:
 - `--restricted-aas CYF`
 - `--bias-jsonl /path/to/bias.jsonl`
 - `--temp 0.6`
+- `--num-workers 1`
 - `--seed 1`
 - `--verbose`
 
@@ -64,7 +65,7 @@ python inverse_fold.py \
   --fixed-positions-csv /path/to/fixed.csv \
   --model-type caliby \
   --checkpoint /path/to/caliby.ckpt \
-  --num-repeats 2 \
+  --num_seq_per_target 2 \
   --output-csv output.csv
 ```
 
@@ -72,7 +73,7 @@ Optional Caliby flags:
 
 - `--restricted-aas CYF`
 - `--temp 0.01`
-- `--num-workers 0`
+- `--num-workers 1`
 - `--seed 1`
 - `--verbose`
 
@@ -172,6 +173,17 @@ Behavior:
 - for Caliby, this is passed as `potts_sampling_cfg.potts_temperature`
 - for ProteinMPNN, this is passed as `sampling_temp`
 
+## num_workers
+
+`--num-workers` applies to both backends, but with different meanings.
+
+- for Caliby, it is passed as `num_workers`
+- for ProteinMPNN, it is passed as `batch_size`
+
+Default:
+
+- `1`
+
 ## Outputs
 
 Main output:
@@ -206,7 +218,8 @@ These let you inspect the converted backend inputs directly.
 
 ## Notes
 
-- ProteinMPNN is always run with internal `batch_size=1`
+- for ProteinMPNN, `--num_seq_per_target` must be divisible by `--num-workers`
 - `--checkpoint` for ProteinMPNN must be an exact `.pt` file path
+- all `--checkpoint` arguments must be absolute paths
 - relative paths for CLI file arguments are resolved from the repo root
 - ProteinMPNN FASTA outputs are generated in a temporary directory and deleted after parsing

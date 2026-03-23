@@ -47,7 +47,7 @@ Supported inputs:
 - `--checkpoint`
 - `--restricted-aas`
 - `--bias-jsonl`
-- `--num-repeats`
+- `--num_seq_per_target`
 - `--output-csv`
 - optional controls:
   - `--seed`
@@ -169,10 +169,17 @@ Temperature handling:
 - for Caliby, it is passed as `potts_sampling_cfg.potts_temperature`
 - for ProteinMPNN, it is passed as `sampling_temp`
 
+num_workers handling:
+
+- `--num-workers` applies to both backends
+- for Caliby, it is passed as `num_workers`
+- for ProteinMPNN, it is passed directly as `batch_size`
+- default is `1`
+
 Checkpoint resolution:
 
+- all `--checkpoint` inputs must be absolute paths
 - for ProteinMPNN, `--checkpoint` must point to the exact `.pt` file
-- relative paths are resolved from the repo root
 
 Important repo-specific note:
 
@@ -212,7 +219,7 @@ Did not execute full end-to-end inference in-session because:
 3. ProteinMPNN in this repo may be a customized fork; the helper script `make_fixed_positions_dict.py` is not used directly because its CSV format does not match the desired interface.
 4. PDB parsing in `inverse_fold.py` is lightweight and assumes standard PDB chain/residue formatting.
 5. The script currently only discovers `*.pdb` files, not `.cif`.
-6. ProteinMPNN is invoked with `batch_size=1` internally; there is no user-facing batch size option.
+6. For ProteinMPNN, `num_seq_per_target` must be divisible by `num_workers`, since `num_workers` is used as `batch_size` in this wrapper.
 
 ## Future Extension Points
 
