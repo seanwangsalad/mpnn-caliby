@@ -178,7 +178,7 @@ num_workers handling:
 
 Checkpoint resolution:
 
-- all `--checkpoint` inputs must be absolute paths
+- relative CLI paths are resolved from the current working directory
 - for ProteinMPNN, `--checkpoint` must point to the exact `.pt` file
 
 Important repo-specific note:

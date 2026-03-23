@@ -12,21 +12,28 @@ REPO_ROOT = Path(__file__).resolve().parent
 CALIBY_ROOT = REPO_ROOT / "caliby"
 
 
+def resolve_cli_path(path_str: str) -> Path:
+    path = Path(path_str).expanduser()
+    if path.is_absolute():
+        return path.resolve()
+    return (Path.cwd() / path).resolve()
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Thin wrapper around Caliby sidechain packing."
     )
-    parser.add_argument("--checkpoint", required=True, help="Absolute Caliby checkpoint path.")
+    parser.add_argument("--checkpoint", required=True, help="Caliby checkpoint path.")
     parser.add_argument("--pdb-dir", required=True, help="Directory of PDB files to pack.")
     parser.add_argument("--output-dir", required=True, help="Destination output directory.")
-    args = parser.parse_args()
-    if not Path(args.checkpoint).expanduser().is_absolute():
-        raise ValueError("--checkpoint must be an absolute path.")
-    return args
+    return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    args.checkpoint = str(resolve_cli_path(args.checkpoint))
+    args.pdb_dir = str(resolve_cli_path(args.pdb_dir))
+    args.output_dir = str(resolve_cli_path(args.output_dir))
 
     env = os.environ.copy()
     env.setdefault("PDB_MIRROR_PATH", "")

@@ -59,7 +59,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--checkpoint",
         required=True,
-        help="Absolute checkpoint path. For ProteinMPNN, this must be an exact .pt file path.",
+        help="Checkpoint path. Relative paths are resolved from the current working directory. For ProteinMPNN, this must be an exact .pt file path.",
     )
     parser.add_argument(
         "--restricted-aas",
@@ -97,8 +97,6 @@ def parse_args() -> argparse.Namespace:
 
     if args.num_seq_per_target < 1:
         raise ValueError("--num_seq_per_target must be >= 1.")
-    if not Path(args.checkpoint).expanduser().is_absolute():
-        raise ValueError("--checkpoint must be an absolute path.")
     if args.num_workers < 1:
         raise ValueError("--num-workers must be >= 1.")
     if args.model_type in {"mpnn", "proteinmpnn"} and args.num_seq_per_target % args.num_workers != 0:
@@ -119,11 +117,11 @@ def ensure_local_paths() -> None:
     os.environ.setdefault("MODEL_PARAMS_DIR", str(REPO_ROOT / "model_params"))
 
 
-def resolve_repo_path(path_str: str) -> Path:
+def resolve_cli_path(path_str: str) -> Path:
     path = Path(path_str).expanduser()
     if path.is_absolute():
-        return path
-    return (REPO_ROOT / path).resolve()
+        return path.resolve()
+    return (Path.cwd() / path).resolve()
 
 
 def normalize_name(raw_name: str) -> str:
@@ -545,7 +543,7 @@ def run_caliby(
 
 
 def resolve_mpnn_checkpoint(checkpoint: str) -> tuple[str, str]:
-    checkpoint_path = Path(checkpoint).expanduser()
+    checkpoint_path = resolve_cli_path(checkpoint)
     if checkpoint_path.suffix != ".pt":
         raise ValueError(f"ProteinMPNN --checkpoint must point to an exact .pt file, got: {checkpoint}")
     if not checkpoint_path.is_file():
@@ -722,9 +720,12 @@ def run_proteinmpnn(
 def main() -> None:
     args = parse_args()
     args.restricted_aas = parse_restricted_aas(args.restricted_aas)
-    args.fixed_positions_csv = str(resolve_repo_path(args.fixed_positions_csv))
+    args.pdb_dir = str(resolve_cli_path(args.pdb_dir))
+    args.fixed_positions_csv = str(resolve_cli_path(args.fixed_positions_csv))
+    args.output_csv = str(resolve_cli_path(args.output_csv))
+    args.checkpoint = str(resolve_cli_path(args.checkpoint))
     if args.bias_jsonl:
-        args.bias_jsonl = str(resolve_repo_path(args.bias_jsonl))
+        args.bias_jsonl = str(resolve_cli_path(args.bias_jsonl))
 
     chain_columns, input_paths, input_kinds, fixed_positions, chain_sequences = load_inputs(
         Path(args.pdb_dir), Path(args.fixed_positions_csv), args.model_type

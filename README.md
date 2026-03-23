@@ -220,6 +220,5 @@ These let you inspect the converted backend inputs directly.
 
 - for ProteinMPNN, `--num_seq_per_target` must be divisible by `--num-workers`
 - `--checkpoint` for ProteinMPNN must be an exact `.pt` file path
-- all `--checkpoint` arguments must be absolute paths
-- relative paths for CLI file arguments are resolved from the repo root
+- relative CLI paths are resolved from the current working directory
 - ProteinMPNN FASTA outputs are generated in a temporary directory and deleted after parsing
