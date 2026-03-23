@@ -11,7 +11,7 @@ The main entry point is:
 Create and activate a conda environment first. Do not use the base environment.
 
 ```bash
-cd /home/seanwang/mpnn-caliby
+cd mpnn-caliby
 conda create -n mpnn-caliby python=3.12
 conda activate mpnn-caliby
 bash setup_shared_env.sh
