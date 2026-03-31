@@ -14,6 +14,7 @@ import torch.nn.functional as F
 import random
 import os.path
 import subprocess
+from tqdm.auto import tqdm
 
 from protein_mpnn_utils import loss_nll, loss_smoothed, gather_edges, gather_nodes, gather_nodes_t, cat_neighbors_nodes, _scores, _S_to_seq, tied_featurize, parse_PDB, parse_fasta
 from protein_mpnn_utils import StructureDataset, StructureDatasetPDB, ProteinMPNN
@@ -242,10 +243,18 @@ def main(args):
     total_residues = 0
     protein_list = []
     total_step = 0
+    progress_enabled = True
+
     # Validation epoch
     with torch.no_grad():
         test_sum, test_weights = 0., 0.
-        for ix, protein in enumerate(dataset_valid):
+        target_pbar = tqdm(
+            dataset_valid,
+            total=len(dataset_valid),
+            desc="Inverse folding targets",
+            disable=not progress_enabled,
+        )
+        for ix, protein in enumerate(target_pbar):
             score_list = []
             global_score_list = []
             all_probs_list = []
@@ -341,7 +350,13 @@ def main(args):
                 t0 = time.time()
                 with open(ali_file, 'w') as f:
                     for temp in temperatures:
-                        for j in range(NUM_BATCHES):
+                        batch_pbar = tqdm(
+                            range(NUM_BATCHES),
+                            desc=f"{name_} @ T={temp:g}",
+                            leave=False,
+                            disable=not progress_enabled,
+                        )
+                        for j in batch_pbar:
                             randn_2 = torch.randn(chain_M.shape, device=X.device)
                             if tied_positions_dict == None:
                                 sample_dict = model.sample(X, randn_2, S, chain_M, chain_encoding_all, residue_idx, mask=mask, temperature=temp, omit_AAs_np=omit_AAs_np, bias_AAs_np=bias_AAs_np, chain_M_pos=chain_M_pos, omit_AA_mask=omit_AA_mask, pssm_coef=pssm_coef, pssm_bias=pssm_bias, pssm_multi=args.pssm_multi, pssm_log_odds_flag=bool(args.pssm_log_odds_flag), pssm_log_odds_mask=pssm_log_odds_mask, pssm_bias_flag=bool(args.pssm_bias_flag), bias_by_res=bias_by_res_all)
@@ -433,6 +448,9 @@ def main(args):
                 total_length = X.shape[1]
                 if print_all:
                     print(f'{num_seqs} sequences of length {total_length} generated in {dt} seconds')
+                if progress_enabled:
+                    target_pbar.set_postfix_str(f"last={name_}")
+        target_pbar.close()
    
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)

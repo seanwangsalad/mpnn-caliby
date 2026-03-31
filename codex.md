@@ -9,7 +9,9 @@ Files added:
 - `environment.yml`
 - `setup_shared_env.sh`
 - `inverse_fold.py`
+- `fast_fixed_pos_csv.py`
 - local fixes in `ProteinMPNN/protein_mpnn_run.py`
+- local fixes in `pack.py`
 
 ## What Was Changed
 
@@ -63,6 +65,18 @@ Supported output schema:
 - `score`
 
 ### 3. CSV Parsing Rules
+
+Added a helper CLI, `fast_fixed_pos_csv.py`, for quickly generating a `fixed_positions.csv` from a directory of PDBs.
+
+Helper behavior:
+
+- scans all `.pdb` files in a user-provided directory
+- writes one row per PDB using the basename as `name`
+- emits all observed chain IDs across the directory as CSV columns
+- for chains listed in `--fixed A,B,...`, writes `1-` so that chain is fully fixed
+- leaves other existing chains blank so they remain fully redesignable
+
+This helper produces CSVs that match the `inverse_fold.py` input format directly.
 
 `fixed_positions.csv` is expected to contain:
 
@@ -119,10 +133,12 @@ Implementation notes:
   - `<stem>.caliby_constraints.csv`
   - `<stem>.caliby_inputs.csv`
 
-Current limitation:
+Packing support:
 
-- only sequence design is wired in
-- no packing
+- `pack.py` wraps `caliby.eval.sampling.sidechain_pack`
+- it can either pack an existing directory of PDB/CIF files directly, or read an `inverse_fold.py` output CSV and graft designed sequences onto ungrafted backbone PDBs first
+- in grafting mode, it writes replicated backbone files to `<output-dir>/grafted_inputs/` as `<name>_<seq_idx>.pdb` and then packs those generated files directly
+- because Caliby packing uses the input stem as the example ID, packed outputs preserve that naming and therefore carry `name_seq_idx` through to the packed sample filenames
 
 ### 5. ProteinMPNN Integration
 
@@ -152,7 +168,10 @@ Score behavior:
 
 Bias handling:
 
-- `--bias-jsonl` is passed to ProteinMPNN as both `bias_AA_jsonl` and `bias_by_res_jsonl`
+- `--bias-jsonl` accepts an inline dictionary string such as `{"W": 1.5, "F": 1.5}`
+- the wrapper writes that dictionary to `<pdb-dir>/proteinmpnn_bias.jsonl`
+- the generated JSONL is passed to ProteinMPNN only as `bias_AA_jsonl`
+- `bias_by_res_jsonl` is intentionally left empty because it expects a different per-target/per-residue structure and will fail if given the global amino-acid bias dictionary
 - ignored for Caliby
 
 Restricted amino acid handling:
@@ -160,6 +179,7 @@ Restricted amino acid handling:
 - `--restricted-aas` is interpreted as a simple string of one-letter codes
 - for example, `CFLY` means omit `C`, `F`, `L`, and `Y`
 - whitespace and commas are ignored and letters are uppercased
+- for ProteinMPNN, `X` is always omitted in addition to any user-provided restricted amino acids so unknown-token residues are not sampled
 
 Temperature handling:
 
@@ -188,6 +208,7 @@ Important repo-specific note:
 - the vendored `protein_mpnn_run.py` was locally patched so:
   - `fixed_positions_dict` is initialized safely
   - `chain_id_jsonl` is respected when `chain_list` is empty
+  - progress bars are shown for inverse folding, including an overall target bar and a per-target sampling bar
 
 ## Validation Performed
 
@@ -220,12 +241,12 @@ Did not execute full end-to-end inference in-session because:
 4. PDB parsing in `inverse_fold.py` is lightweight and assumes standard PDB chain/residue formatting.
 5. The script currently only discovers `*.pdb` files, not `.cif`.
 6. For ProteinMPNN, `num_seq_per_target` must be divisible by `num_workers`, since `num_workers` is used as `batch_size` in this wrapper.
+7. Some upstream ProteinMPNN log lines are misleading, e.g. `fixed_positions_dict: None` is printed before the JSONL is loaded.
 
 ## Future Extension Points
 
-1. Add Caliby packing mode and packed-structure outputs.
-2. Add richer Caliby-side sanity outputs if full sampling config inspection is needed.
-3. Add CIF input support.
-4. Add explicit tests with tiny fixture PDBs and fixture CSVs.
-5. Decide whether `score` for ProteinMPNN should optionally expose `global_score` instead.
-6. Add richer chain-selection controls if future inputs need redesigning only a subset of CSV columns per run.
+1. Add CIF input support.
+2. Add explicit tests with tiny fixture PDBs and fixture CSVs.
+3. Decide whether `score` for ProteinMPNN should optionally expose `global_score` instead.
+4. Add richer chain-selection controls if future inputs need redesigning only a subset of CSV columns per run.
+5. Clean up or override misleading upstream ProteinMPNN log messages in the vendored runner.

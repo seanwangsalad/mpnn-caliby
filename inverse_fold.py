@@ -69,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--bias-jsonl",
         default="",
-        help="Optional ProteinMPNN bias JSONL. Ignored by Caliby.",
+        help='Optional ProteinMPNN amino-acid bias dictionary string, e.g. \'{"W": 1.5, "F": 1.5}\'. Ignored by Caliby.',
     )
     parser.add_argument(
         "--num_seq_per_target",
@@ -142,6 +142,44 @@ def parse_restricted_aas(raw_value: str) -> str:
     if invalid:
         raise ValueError(f"Unsupported amino acids in --restricted-aas: {invalid}")
     return "".join(dict.fromkeys(parsed))
+
+
+def get_mpnn_omit_aas(restricted_aas: str) -> str:
+    return "".join(dict.fromkeys((restricted_aas or "") + "X"))
+
+
+def parse_bias_dict(raw_value: str) -> dict[str, float]:
+    value = (raw_value or "").strip()
+    if not value:
+        return {}
+
+    try:
+        parsed = ast.literal_eval(value)
+    except (SyntaxError, ValueError) as exc:
+        raise ValueError(
+            "--bias-jsonl must be a Python-style dictionary string such as "
+            '\'{"W": 1.5, "F": 1.5, "Y": 1.0, "L": 1.0, "I": 1.0}\'.'
+        ) from exc
+
+    if not isinstance(parsed, dict):
+        raise ValueError("--bias-jsonl must parse to a dictionary of amino-acid biases.")
+
+    normalized: dict[str, float] = {}
+    for key, val in parsed.items():
+        aa = str(key).strip().upper()
+        if aa not in AA_ALPHABET or len(aa) != 1:
+            raise ValueError(f"Unsupported amino acid in --bias-jsonl: {key!r}")
+        try:
+            normalized[aa] = float(val)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Bias value for amino acid {aa!r} must be numeric, got {val!r}") from exc
+    return normalized
+
+
+def write_bias_jsonl(pdb_dir: Path, bias_dict: dict[str, float]) -> Path:
+    bias_path = pdb_dir / "proteinmpnn_bias.jsonl"
+    bias_path.write_text(json.dumps(bias_dict, sort_keys=True) + "\n")
+    return bias_path
 
 
 def parse_position_cell(raw_value: str) -> list[PositionSpan]:
@@ -644,6 +682,7 @@ def run_proteinmpnn(
                     "designed_chains",
                     "fixed_chains",
                     "fixed_positions_json",
+                    "bias_dict",
                     "bias_jsonl",
                     "temp",
                     "num_seq_per_target",
@@ -659,6 +698,7 @@ def run_proteinmpnn(
                         "designed_chains": ",".join(designed_chains),
                         "fixed_chains": ",".join(fixed_chains),
                         "fixed_positions_json": json.dumps(fixed_positions_dict[name], sort_keys=True),
+                        "bias_dict": json.dumps(args.bias_dict, sort_keys=True) if args.bias_dict else "",
                         "bias_jsonl": args.bias_jsonl,
                         "temp": get_effective_temp(args),
                         "num_seq_per_target": args.num_seq_per_target,
@@ -694,9 +734,9 @@ def run_proteinmpnn(
             jsonl_path=None,
             chain_id_jsonl=str(chain_id_jsonl),
             fixed_positions_jsonl=str(fixed_positions_jsonl),
-            omit_AAs=args.restricted_aas or "X",
+            omit_AAs=get_mpnn_omit_aas(args.restricted_aas),
             bias_AA_jsonl=args.bias_jsonl or "",
-            bias_by_res_jsonl=args.bias_jsonl or "",
+            bias_by_res_jsonl="",
             omit_AA_jsonl="",
             pssm_jsonl="",
             pssm_multi=0.0,
@@ -724,8 +764,8 @@ def main() -> None:
     args.fixed_positions_csv = str(resolve_cli_path(args.fixed_positions_csv))
     args.output_csv = str(resolve_cli_path(args.output_csv))
     args.checkpoint = str(resolve_cli_path(args.checkpoint))
-    if args.bias_jsonl:
-        args.bias_jsonl = str(resolve_cli_path(args.bias_jsonl))
+    args.bias_dict = parse_bias_dict(args.bias_jsonl)
+    args.bias_jsonl = str(write_bias_jsonl(Path(args.pdb_dir), args.bias_dict)) if args.bias_dict else ""
 
     chain_columns, input_paths, input_kinds, fixed_positions, chain_sequences = load_inputs(
         Path(args.pdb_dir), Path(args.fixed_positions_csv), args.model_type
