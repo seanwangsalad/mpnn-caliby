@@ -10,19 +10,24 @@ The main entry point is:
 
 ## Install
 
-Create and activate a conda environment first. Do not use the base environment.
+### uv (recommended)
+
+```bash
+cd mpnn-caliby
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install -e . -e caliby/
+```
+
+### conda
 
 ```bash
 cd mpnn-caliby
 conda create -n mpnn-caliby python=3.12
 conda activate mpnn-caliby
-bash setup_shared_env.sh
+conda install -c conda-forge "rdkit>=2024.03,<2025.09"
+pip install -e caliby/
 ```
-
-What `setup_shared_env.sh` does:
-
-- updates the active conda env from `environment.yml`
-- installs `caliby` in editable mode
 
 Quick sanity check:
 

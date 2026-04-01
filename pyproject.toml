@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mpnn-caliby"
+version = "0.1"
+description = "Unified inverse folding CLI wrapping Caliby and ProteinMPNN"
+requires-python = ">=3.12"
+dependencies = [
+    "caliby @ file:caliby",
+]
+
+[tool.setuptools]
+packages = []
