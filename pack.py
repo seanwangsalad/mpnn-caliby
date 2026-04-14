@@ -55,6 +55,12 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional inverse_fold output CSV. If provided, sequences are grafted onto backbone PDBs before packing.",
     )
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=2,
+        help="Number of CPU DataLoader workers for sidechain packing (default: 2). Reduce if hitting OOM.",
+    )
     return parser.parse_args()
 
 
@@ -223,6 +229,7 @@ def main() -> None:
                 f"input_cfg.pdb_dir={input_pdb_dir}",
                 f"input_cfg.pdb_name_list={manifest_path}",
                 f"out_dir={output_dir}",
+                f"num_workers={args.num_workers}",
             ],
             check=True,
             cwd=str(CALIBY_ROOT),
