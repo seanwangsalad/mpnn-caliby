@@ -95,6 +95,68 @@ def build_design_stem(name: str, seq_idx: str) -> str:
     return f"{clean_name}_{clean_seq_idx}"
 
 
+def _convert_one_cif_to_pdb(cif_path: Path, pdb_path: Path) -> None:
+    """Convert a minimal caliby-emitted mmCIF file to PDB format.
+
+    Caliby writes mmCIFs with a fixed _atom_site loop and no B-factor column,
+    which trips strict parsers. We parse the loop directly from the known
+    column order and emit standard ATOM records.
+    """
+    columns: list[str] = []
+    in_loop = False
+    in_atom_site = False
+
+    records: list[str] = []
+    with cif_path.open() as fh:
+        for raw in fh:
+            line = raw.rstrip("\n")
+            stripped = line.strip()
+
+            if stripped == "loop_":
+                in_loop = True
+                in_atom_site = False
+                columns = []
+                continue
+
+            if in_loop and stripped.startswith("_atom_site."):
+                in_atom_site = True
+                columns.append(stripped)
+                continue
+
+            if in_atom_site and stripped.startswith("ATOM"):
+                tokens = stripped.split()
+                if len(tokens) != len(columns):
+                    continue
+                row = dict(zip(columns, tokens))
+                serial    = int(row["_atom_site.id"])
+                atom_name = row["_atom_site.auth_atom_id"]
+                resname   = row["_atom_site.auth_comp_id"]
+                chain     = row["_atom_site.auth_asym_id"]
+                resseq    = int(row["_atom_site.auth_seq_id"])
+                x         = float(row["_atom_site.Cartn_x"])
+                y         = float(row["_atom_site.Cartn_y"])
+                z         = float(row["_atom_site.Cartn_z"])
+                occupancy = float(row["_atom_site.occupancy"])
+                element   = row["_atom_site.type_symbol"]
+
+                # skip placeholder atoms (caliby writes OXT with occ 0.0)
+                if occupancy == 0.0:
+                    continue
+
+                name_field = f" {atom_name:<3s}" if len(atom_name) < 4 else atom_name[:4]
+                records.append(
+                    f"ATOM  {serial:>5d} {name_field:<4s} {resname:>3s} {chain:1s}"
+                    f"{resseq:>4d}    {x:>8.3f}{y:>8.3f}{z:>8.3f}{occupancy:>6.2f}  0.00"
+                    f"          {element:>2s}"
+                )
+            elif in_atom_site and (stripped == "#" or stripped == ""):
+                in_atom_site = False
+                in_loop = False
+
+    with pdb_path.open("w") as out:
+        out.write("\n".join(records) + "\nEND\n")
+
+
 def convert_packed_cifs_to_pdbs(output_dir: Path) -> None:
     packed_cif_dir = output_dir / "packed_samples"
     if not packed_cif_dir.is_dir():
@@ -104,20 +166,11 @@ def convert_packed_cifs_to_pdbs(output_dir: Path) -> None:
     if not cif_paths:
         return
 
-    import pymol
-
     packed_pdb_dir = output_dir / "packed_samples_pdbs"
     packed_pdb_dir.mkdir(parents=True, exist_ok=True)
-    pymol.finish_launching(["pymol", "-qc"])
-    try:
-        for cif_path in cif_paths:
-            object_name = "structure"
-            out_path = packed_pdb_dir / f"{cif_path.stem}.pdb"
-            pymol.cmd.load(str(cif_path), object_name)
-            pymol.cmd.save(str(out_path), object_name)
-            pymol.cmd.delete(object_name)
-    finally:
-        pymol.cmd.quit()
+
+    for cif_path in cif_paths:
+        _convert_one_cif_to_pdb(cif_path, packed_pdb_dir / f"{cif_path.stem}.pdb")
 
 
 def graft_sequences_to_pdbs(pdb_dir: Path, csv_path: Path, output_dir: Path) -> tuple[Path, list[str]]:
