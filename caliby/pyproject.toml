@@ -21,7 +21,7 @@ dependencies = [
     "numpy==1.26.3",
     "omegaconf==2.3.0",
     "p-tqdm==1.4.2",
-    "pandas==2.3.3",
+    "pandas",
     "pyyaml==6.0.3",
     "rdkit>=2024.3.2,<2025.9",
     "torch==2.6.0",
