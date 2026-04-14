@@ -16,6 +16,10 @@ The main entry point is:
 cd mpnn-caliby
 uv venv --python 3.12
 source .venv/bin/activate
+uv pip install setuptools
+
+load gcc12 -> ml load cmake -> uv pip install cmake
+
 uv pip install -e . -e caliby/
 ```
 
