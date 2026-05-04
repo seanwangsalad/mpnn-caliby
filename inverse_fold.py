@@ -282,8 +282,6 @@ def load_fixed_positions_table(path: Path) -> tuple[list[str], OrderedDict[str, 
 def resolve_named_inputs(
     pdb_dir: Path,
     names: list[str],
-    *,
-    allow_directories: bool,
 ) -> tuple[OrderedDict[str, Path], dict[str, str]]:
     input_paths: OrderedDict[str, Path] = OrderedDict()
     input_kinds: dict[str, str] = {}
@@ -301,8 +299,6 @@ def resolve_named_inputs(
             input_kinds[name] = "pdb"
             continue
         if has_dir:
-            if not allow_directories:
-                raise ValueError(f"ProteinMPNN requires {name} to resolve to {pdb_path}, not the directory {dir_path}.")
             input_paths[name] = dir_path
             input_kinds[name] = "dir"
             continue
@@ -381,8 +377,31 @@ def load_inputs(
     input_paths, input_kinds = resolve_named_inputs(
         pdb_dir,
         list(fixed_position_specs.keys()),
-        allow_directories=model_type == "caliby",
     )
+
+    if model_type in {"mpnn", "proteinmpnn"}:
+        expanded_paths: OrderedDict[str, Path] = OrderedDict()
+        expanded_kinds: dict[str, str] = {}
+        expanded_specs: OrderedDict[str, dict[str, list[PositionSpan]]] = OrderedDict()
+        for name, path in input_paths.items():
+            if input_kinds[name] == "pdb":
+                expanded_paths[name] = path
+                expanded_kinds[name] = "pdb"
+                expanded_specs[name] = fixed_position_specs[name]
+                continue
+            sub_pdbs = sorted(path.glob("*.pdb"))
+            if not sub_pdbs:
+                raise ValueError(f"Subdirectory {path} contains no .pdb files for ProteinMPNN expansion.")
+            for sub_pdb in sub_pdbs:
+                new_name = f"{name}_{sub_pdb.stem}"
+                if new_name in expanded_paths:
+                    raise ValueError(f"Duplicate expanded name {new_name!r} from {path}.")
+                expanded_paths[new_name] = sub_pdb
+                expanded_kinds[new_name] = "pdb"
+                expanded_specs[new_name] = fixed_position_specs[name]
+        input_paths = expanded_paths
+        input_kinds = expanded_kinds
+        fixed_position_specs = expanded_specs
 
     chain_sequences = {}
     for name, path in input_paths.items():
@@ -644,7 +663,7 @@ def run_proteinmpnn(
         designed_chain_orders: dict[str, list[str]] = {}
 
         for name, pdb_path in input_paths.items():
-            staged_path = input_dir_path / pdb_path.name
+            staged_path = input_dir_path / f"{name}.pdb"
             try:
                 os.symlink(pdb_path, staged_path)
             except OSError:
