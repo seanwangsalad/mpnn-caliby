@@ -19,6 +19,14 @@ REPO_ROOT = Path(__file__).resolve().parent
 CALIBY_ROOT = REPO_ROOT / "caliby"
 PROTEIN_MPNN_ROOT = REPO_ROOT / "ProteinMPNN"
 PositionSpan = tuple[int | None, int | None]
+# Lineage token: a flat conformer PDB named "{parent}@@{idx}.pdb" is a child of
+# fixed_positions.csv row "{parent}" — same structure, different conformation.
+# Each child is inverse-folded INDEPENDENTLY (one mpnn pass per conformer); they
+# only share the parent's fixed-position spans. This is NOT ensemble inference
+# (that is caliby-only, via a dir-of-dirs in run_caliby). The token just lets one
+# flat dir (e.g. partial_flow/completed/_aggregate_pdbs) carry per-parent fixed
+# positions without per-parent subdirectories (which force doubled output names).
+CONFORMER_TOKEN = "@@"
 AA_ALPHABET = set("ACDEFGHIKLMNPQRSTVWY")
 PDB_AA3_TO_AA1 = {
     "ALA": "A",
@@ -289,11 +297,16 @@ def resolve_named_inputs(
     for name in names:
         pdb_path = pdb_dir / f"{name}.pdb"
         dir_path = pdb_dir / name
+        flat_conformers = flat_conformer_pdbs(pdb_dir, name)
         has_pdb = pdb_path.is_file()
         has_dir = dir_path.is_dir()
+        has_flat = bool(flat_conformers)
 
-        if has_pdb and has_dir:
-            raise ValueError(f"Ambiguous input for {name!r}: both {pdb_path} and {dir_path} exist.")
+        if sum([has_pdb, has_dir, has_flat]) > 1:
+            raise ValueError(
+                f"Ambiguous input for {name!r} under {pdb_dir}: more than one of "
+                f"{pdb_path.name}, {name}/, or {name}{CONFORMER_TOKEN}*.pdb exist."
+            )
         if has_pdb:
             input_paths[name] = pdb_path
             input_kinds[name] = "pdb"
@@ -302,9 +315,23 @@ def resolve_named_inputs(
             input_paths[name] = dir_path
             input_kinds[name] = "dir"
             continue
-        raise ValueError(f"Could not resolve {name!r} under {pdb_dir}. Expected either {pdb_path.name} or directory {name}/.")
+        if has_flat:
+            # flat shared-fixed-positions group: store parent dir; conformers
+            # re-globbed at use sites. Each is inverse-folded independently.
+            input_paths[name] = pdb_dir
+            input_kinds[name] = "flat"
+            continue
+        raise ValueError(
+            f"Could not resolve {name!r} under {pdb_dir}. Expected one of "
+            f"{pdb_path.name}, directory {name}/, or flat conformers {name}{CONFORMER_TOKEN}*.pdb."
+        )
 
     return input_paths, input_kinds
+
+
+def flat_conformer_pdbs(pdb_dir: Path, name: str) -> list[Path]:
+    """Flat lineage conformers for a parent: pdb_dir/{name}@@*.pdb, sorted."""
+    return sorted(pdb_dir.glob(f"{name}{CONFORMER_TOKEN}*.pdb"))
 
 
 def resolve_primary_conformer_pdb(ensemble_dir: Path) -> Path:
@@ -389,11 +416,18 @@ def load_inputs(
                 expanded_kinds[name] = "pdb"
                 expanded_specs[name] = fixed_position_specs[name]
                 continue
-            sub_pdbs = sorted(path.glob("*.pdb"))
+            if input_kinds[name] == "flat":
+                # path is the parent dir; conformers already carry unique
+                # "{name}@@{idx}" stems, so use them verbatim (no doubling).
+                sub_pdbs = flat_conformer_pdbs(path, name)
+                rename = False
+            else:  # "dir": subdir of conformers; prefix with parent for uniqueness
+                sub_pdbs = sorted(path.glob("*.pdb"))
+                rename = True
             if not sub_pdbs:
-                raise ValueError(f"Subdirectory {path} contains no .pdb files for ProteinMPNN expansion.")
+                raise ValueError(f"No .pdb files found for {name!r} under {path} for ProteinMPNN expansion.")
             for sub_pdb in sub_pdbs:
-                new_name = f"{name}_{sub_pdb.stem}"
+                new_name = f"{name}_{sub_pdb.stem}" if rename else sub_pdb.stem
                 if new_name in expanded_paths:
                     raise ValueError(f"Duplicate expanded name {new_name!r} from {path}.")
                 expanded_paths[new_name] = sub_pdb
@@ -407,6 +441,9 @@ def load_inputs(
     for name, path in input_paths.items():
         if input_kinds[name] == "pdb":
             chain_sequences[name] = parse_pdb_chain_sequences(path)
+        elif input_kinds[name] == "flat":
+            # all conformers share the parent sequence; parse the first
+            chain_sequences[name] = parse_pdb_chain_sequences(flat_conformer_pdbs(path, name)[0])
         else:
             chain_sequences[name] = parse_pdb_chain_sequences(resolve_primary_conformer_pdb(path))
 
@@ -415,7 +452,10 @@ def load_inputs(
         available = set(chains)
         invalid = [chain for chain in chain_columns if fixed_position_specs[name].get(chain) and chain not in available]
         if invalid:
-            target_label = f"{name}.pdb" if input_kinds[name] == "pdb" else f"{name}/"
+            target_label = {
+                "pdb": f"{name}.pdb",
+                "flat": f"{name}{CONFORMER_TOKEN}*.pdb",
+            }.get(input_kinds[name], f"{name}/")
             raise ValueError(f"{target_label} has no chains matching constrained columns: {invalid}")
         fixed_positions[name] = {}
         for chain in chain_columns:
