@@ -85,10 +85,11 @@ This helper produces CSVs that match the `inverse_fold.py` input format directly
 
 Name resolution under `--pdb-dir`:
 
-- each CSV `name` is resolved as either `<name>.pdb` or `<name>/`
+- each CSV `name` is resolved as exactly one of: `<name>.pdb`, `<name>/`, or flat conformers `<name>@@*.pdb` (the `@@` lineage token). More than one matching → error.
 - if `<name>.pdb` exists, the row is treated as a single-structure input
 - if `<name>/` exists and `--model-type caliby` is used, the row is treated as an ensemble directory and routed through Caliby `seq_des_ensemble`
-- ProteinMPNN does not accept directory rows; its CSV names must resolve to concrete `.pdb` files
+- if `<name>@@*.pdb` files exist (flat shared-fixed-positions group), each conformer is expanded to a target named `<name>@@<idx>` (its own stem, no doubling) and **inherits the parent `<name>` row's fixed positions**. Each is inverse-folded **independently** — this is NOT ensemble inference (ensemble is caliby-only, via `<name>/`). Lets one flat dir (e.g. PPIFlow's `partial_flow/completed/_aggregate_pdbs`) carry per-parent fixed positions for multiple conformers without per-parent subdirectories (which force doubled `{parent}_{stem}` output names).
+- ProteinMPNN does not accept directory rows; its CSV names must resolve to concrete `.pdb` files or a `@@` flat group. (`@@` flat is wired for mpnn/proteinmpnn; caliby `@@` is not routed through `seq_des_ensemble`.)
 
 Interpretation:
 
